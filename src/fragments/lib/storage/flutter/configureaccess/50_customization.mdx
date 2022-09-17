@@ -1,0 +1,88 @@
+## Customization
+
+### Customize Object Key Path
+
+You can customize your key path by defining a prefix resolver:
+
+```dart
+// Define your own prefix resolver, that conforms to `StorageS3PrefixResolver`
+class MyCustomPrefixResolver implements StorageS3PrefixResolver {
+  @override
+  Future<String> resolvePrefix(
+      {required StorageAccessLevel storageAccessLevel,
+      String? identityId}) async {
+    switch (storageAccessLevel) {
+      case StorageAccessLevel.guest:
+        {
+          return 'myPublicPrefix/';
+        }
+      case StorageAccessLevel.protected:
+        {
+          return 'myProtectedPrefix/' + identityId! + '/';
+        }
+      case StorageAccessLevel.private:
+        {
+          return 'myPrivatePrefix/' + identityId! + '/';
+        }
+    }
+  }
+}
+```
+
+Then configure the storage plugin with the resolver.
+
+```dart
+AmplifyStorageS3 storage = new AmplifyStorageS3(prefixResolver: MyCustomPrefixResolver());
+Amplify.addPlugin(storage);
+```
+
+Add the IAM policy that corresponds with the prefixes defined above to enable read, write and delete operation for all the objects under path _myPublicPrefix/_:
+
+```xml
+"Statement": [
+    {
+        "Effect": "Allow",
+        "Action": [
+            "s3:GetObject",
+            "s3:PutObject",
+            "s3:DeleteObject"
+        ],
+        "Resource": [
+            "arn:aws:s3:::your-s3-bucket/myPublicPrefix/*",
+        ]
+    }
+]
+```
+
+If you want to have custom _private_ path prefix like _myPrivatePrefix/_, you need to add it into your IAM policy:
+
+```xml
+"Statement": [
+    {
+        "Effect": "Allow",
+        "Action": [
+            "s3:GetObject",
+            "s3:PutObject",
+            "s3:DeleteObject"
+        ],
+        "Resource": [
+            "arn:aws:s3:::your-s3-bucket/myPrivatePrefix/${cognito-identity.amazonaws.com:sub}/*"
+        ]
+    }
+]
+```
+
+#### Passthrough PrefixResolver
+
+If you would like no prefix resolution logic, such as performing S3 requests at the root of the bucket, create a prefix resolver that returns an empty string:
+
+```dart
+class PassThroughPrefixResolver implements StorageS3PrefixResolver {
+  @override
+  Future<String> resolvePrefix(
+      {required StorageAccessLevel storageAccessLevel,
+      String? identityId}) async {
+    return '';
+  }
+}
+```
